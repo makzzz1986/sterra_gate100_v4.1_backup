@@ -109,4 +109,4 @@
       dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/serial"
 
 # running should be
-# ansible-playbook -l [name of hosts file].yml --vault-password-file /etc/ansible/.vault.txt
+# ansible-playbook -l [name of hosts file].yml ansible_gate_backup.yml  --vault-password-file /etc/ansible/.vault.txt
