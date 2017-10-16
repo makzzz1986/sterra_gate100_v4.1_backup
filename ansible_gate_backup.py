@@ -1,0 +1,112 @@
+---
+- hosts: all
+  gather_facts: no
+  connection: ssh
+
+  # backups folder
+  vars:
+    backup_root: /var/gate_backup
+
+  # secret vault crypted file
+  vars_files: 
+    - /etc/ansible/secrets_vault.yml
+
+ 
+  tasks:
+  - name: Define cisco-like user login/password
+    set_fact:
+      cli:
+        host: "{{ inventory_hostname }}"
+        username: "{{ cscons.username }}"
+        password: "{{ cscons.password }}"
+        auth_pass: "{{ cscons.auth_pass }}"
+
+ - name: Ensure backup folder is created
+   file:
+     path: "{{ backup_root }}"
+     state: directory
+   run_once: yes
+   ignore_errors: yes
+
+  - name: Get timestamp
+    command: date +%d-%m-%Y
+    register: timestamp
+    run_once: yes
+
+  - name: Ensure device folder is created
+    file:
+      path: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}"
+      state: directory
+
+  - name: Copy interfaces configuration
+    fetch:
+      src: /etc/network/interfaces
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/interfaces"
+      flat: yes
+
+  - name: Copy cs_console interfaces aliases
+    fetch:
+      src: /etc/ifaliases.cf
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/ifaliases.cf"
+      flat: yes
+
+  - name: Copy DHCP configuration
+    fetch:
+      src: /etc/dhcp/dhcpd.conf
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/dhcpd.conf"
+      flat: yes
+
+  - name: Copy DHCP vlan configuration
+    fetch:
+      src: /etc/default/isc-dhcp-server
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/isc-dhcp-server"
+      flat: yes
+
+  - name: Copy licenses file
+    fetch:
+      src: /opt/VPNagent/bin/agent.lic
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/agent.lic"
+      flat: yes
+
+  - name: Copy rclocal
+    fetch:
+      src: /etc/rc.local.inc
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/rc.local.inc"
+      flat: yes
+
+  - name: Copy NTP configuration
+    fetch:
+      src: /etc/ntp.conf
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/ntp.conf"
+      flat: yes
+
+  - name: Copy RSYSLOG configuration
+    fetch:
+      src: /etc/rsyslog.conf
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/rsyslog.conf"
+      flat: yes
+
+  - name: Get cisco-like configuration and hardware serial number
+    connection: local
+    ios_command:
+      provider: "{{ cli }}"
+      authorize: yes
+      commands:
+        - sh run
+        - run dmidecode -t system | grep Ser
+    register: sh_run
+
+  - name: Copy running-config to local file 
+    connection: local
+    copy:
+      content: "{{ sh_run.stdout[0] }}"
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/running-config"
+
+  - name: Copy serial number to local file serial
+    connection: local
+    copy:
+      content: "{{ sh_run.stdout[1] }}"
+      dest: "{{ backup_root }}/{{ inventory_hostname }}/{{ timestamp.stdout }}/serial"
+
+# running should be
+# ansible-playbook -l [name of hosts file].yml --vault-password-file /etc/ansible/.vault.txt
